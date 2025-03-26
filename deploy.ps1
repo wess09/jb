@@ -221,8 +221,7 @@ if (-not $env:INSTANCE_NAME) {
 Write-Host "`n=== 重要配置信息 ===" -ForegroundColor Cyan
 $envContent = Get-Content ".env" -Raw
 $ONEBOT_ACCESS_TOKEN = ([regex]"^ONEBOT_ACCESS_TOKEN=([^\r\n]*)").Match($envContent).Groups[1].Value
-$NEKRO_ADMIN_PASSWORD = ([regex]"^NEKRO_ADMIN_PASSWORD=([^\r\n]*)").Match($envContent).Groups[1].Value").Match($envContent).Groups[1].Value
-$NEKRO_ADMIN_PASSWORD = ([regex]"^NEKRO_ADMIN_PASSWORD=(.*)").Match($envContent).Groups[1].Value
+$NEKRO_ADMIN_PASSWORD = ([regex]"^NEKRO_ADMIN_PASSWORD=([^\r\n]*)").Match($envContent).Groups[1].Value
 Write-Host "OneBot 访问令牌: $ONEBOT_ACCESS_TOKEN"
 Write-Host "管理员账号: admin | 密码: $NEKRO_ADMIN_PASSWORD"
 

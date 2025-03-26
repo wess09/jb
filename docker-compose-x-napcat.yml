@@ -1,0 +1,70 @@
+# 运行 `export NEKRO_DATA_DIR=${HOME}/srv/nekro_agent` 设定数据目录
+# 然后运行 `sudo -E docker-compose up -d` 启动服务
+
+version: "3"
+
+services:
+  # PostgreSQL 服务
+  nekro_postgres:
+    image: postgres:14
+    container_name: ${INSTANCE_NAME}postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+    ports:
+      - "${POSTGRES_EXPOSE_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nekro_network
+    restart: unless-stopped
+
+  # 主服务
+  nekro_agent:
+    image: kromiose/nekro-agent:latest
+    container_name: ${INSTANCE_NAME}nekro_agent
+    environment:
+      - NEKRO_DATA_DIR=${NEKRO_DATA_DIR}
+      - NEKRO_EXPOSE_PORT=${NEKRO_EXPOSE_PORT:-8021}
+      - NEKRO_POSTGRES_HOST=${POSTGRES_HOST:-nekro_postgres}
+      - NEKRO_POSTGRES_PORT=5432
+      - NEKRO_POSTGRES_USER=${POSTGRES_USER:-nekro_agent}
+      - NEKRO_POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-nekro_agent}
+      - NEKRO_POSTGRES_DATABASE=${POSTGRES_DATABASE:-nekro_agent}
+      - NEKRO_RUN_IN_DOCKER=true
+      - NEKRO_ADMIN_PASSWORD=${NEKRO_ADMIN_PASSWORD:-}
+      - ONEBOT_ACCESS_TOKEN=${ONEBOT_ACCESS_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${NEKRO_DATA_DIR}:${NEKRO_DATA_DIR}:rw
+    depends_on:
+      - nekro_postgres
+    ports:
+      - "${NEKRO_EXPOSE_PORT:-8021}:8021"
+    networks:
+      - nekro_network
+    restart: unless-stopped
+
+  # Napcat 服务
+  napcat:
+    image: mlikiowa/napcat-docker
+    container_name: ${INSTANCE_NAME}napcat
+    ports:
+      - "${NAPCAT_EXPOSE_PORT:-6099}:6099"
+    volumes:
+      - ${NEKRO_DATA_DIR}:/app/nekro_agent_data
+      - ${NEKRO_DATA_DIR}/napcat_data/QQ:/app/.config/QQ
+      - ${NEKRO_DATA_DIR}/napcat_data/napcat:/app/napcat/config
+    networks:
+      - nekro_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: ${INSTANCE_NAME}postgres_data
+
+networks:
+  nekro_network:
+    name: ${INSTANCE_NAME}network
+    driver: bridge

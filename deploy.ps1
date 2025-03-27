@@ -46,10 +46,13 @@ if (-not $env:NEKRO_ENV_DIR) {
     $env:NEKRO_ENV_DIR = "$PSScriptRoot"
 }
 
-# 设置WSL内部路径
-# 如果环境变量 NEKRO_DATA_DIR 未设置，则需要将 Windows 路径转换为 WSL 路径格式
+
 if (-not $env:NEKRO_DATA_DIR) {
-    $env:NEKRO_DATA_DIR = "/mnt/wsl/docker-desktop/nekro_agent_data/"
+    $env:NEKRO_DATA_DIR = "$(wsl --exec wslpath $env:USERPROFILE)/nekro_agent_data"
+}
+
+if (-not $env:NEKRO_DATA_DIR_WIN) {
+    $env:NEKRO_DATA_DIR_WIN = "$env:USERPROFILE\nekro_agent_data"
 }
 
 Write-Host "WSL路径 NEKRO_DATA_DIR: $env:NEKRO_DATA_DIR"
@@ -75,60 +78,36 @@ if (-not (Test-Path ".env")) {
         exit 1
     }
 
-    # 替换或添加 NEKRO_DATA_DIR
-    $envContent = Get-Content ".env.temp" -Raw
-    if ($envContent -match "^NEKRO_DATA_DIR=") {
-        $envContent = $envContent -replace "^NEKRO_DATA_DIR=.*", "NEKRO_DATA_DIR=$($env:NEKRO_DATA_DIR -replace '\\', '/')"
-    # 移除重复的驱动器字母
-    $envContent = $envContent -replace '([A-Za-z]):/+([A-Za-z]):', '$1:/'
-    } else {
-        $envContent += "`nNEKRO_DATA_DIR=$($env:NEKRO_DATA_DIR -replace "\\", "/")"
-    }
+# 配置文件路径
+$configFile = "$env:NEKRO_ENV_DIR\.env.temp"
 
-    # 生成随机的 ONEBOT_ACCESS_TOKEN 和 NEKRO_ADMIN_PASSWORD（如果它们为空）
-    if ($envContent -notmatch "ONEBOT_ACCESS_TOKEN=") {
-        $ONEBOT_ACCESS_TOKEN = Generate-RandomString -length 32
-        $envContent += "`nONEBOT_ACCESS_TOKEN=$ONEBOT_ACCESS_TOKEN"
-    } elseif ($envContent -match "ONEBOT_ACCESS_TOKEN=\s*$") {
-        $ONEBOT_ACCESS_TOKEN = Generate-RandomString -length 32
-        $envContent = $envContent -replace "ONEBOT_ACCESS_TOKEN=\s*$", "ONEBOT_ACCESS_TOKEN=$ONEBOT_ACCESS_TOKEN"
-    }
+# 生成随机 OneBot Token（32 位随机字符串）
+$oneBotToken = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
 
-    if ($envContent -notmatch "NEKRO_ADMIN_PASSWORD=") {
-        $NEKRO_ADMIN_PASSWORD = Generate-RandomString -length 16
-        $envContent += "`nNEKRO_ADMIN_PASSWORD=$NEKRO_ADMIN_PASSWORD"
-    } elseif ($envContent -match "NEKRO_ADMIN_PASSWORD=\s*$") {
-        $NEKRO_ADMIN_PASSWORD = Generate-RandomString -length 16
-        $envContent = $envContent -replace "NEKRO_ADMIN_PASSWORD=\s*$", "NEKRO_ADMIN_PASSWORD=$NEKRO_ADMIN_PASSWORD"
-    }
+# 生成随机 Admin 密码（16 位随机字符串）
+$adminPassword = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 16 | ForEach-Object {[char]$_})
 
-    # 将修改后的内容写入 .env 文件
-    $envContent | Set-Content "$PSScriptRoot\.env" -NoNewline
-    Remove-Item "$PSScriptRoot\.env.temp" -Force
-    Write-Host "已获取并修改 .env 模板。"
-} else {
-    # 如果已存在 .env 文件，检查并更新密钥
-    $envContent = Get-Content ".env" -Raw
-    if ($envContent -notmatch "ONEBOT_ACCESS_TOKEN=") {
-        $ONEBOT_ACCESS_TOKEN = Generate-RandomString -length 32
-        $envContent += "`nONEBOT_ACCESS_TOKEN=$ONEBOT_ACCESS_TOKEN"
-        $envContent | Set-Content ".env" -NoNewline
-    } elseif ($envContent -match "ONEBOT_ACCESS_TOKEN=\s*$" -or $envContent -match "ONEBOT_ACCESS_TOKEN=$") {
-        $ONEBOT_ACCESS_TOKEN = Generate-RandomString -length 32
-        $envContent = $envContent -replace "^ONEBOT_ACCESS_TOKEN=\s*$|^ONEBOT_ACCESS_TOKEN=$", "ONEBOT_ACCESS_TOKEN=$ONEBOT_ACCESS_TOKEN"
-        $envContent | Set-Content ".env" -NoNewline
-    }
+# 读取配置文件内容
+$configContent = Get-Content $configFile
 
-    if ($envContent -notmatch "NEKRO_ADMIN_PASSWORD=") {
-        $NEKRO_ADMIN_PASSWORD = Generate-RandomString -length 16
-        $envContent += "`nNEKRO_ADMIN_PASSWORD=$NEKRO_ADMIN_PASSWORD"
-        $envContent | Set-Content ".env" -NoNewline
-    } elseif ($envContent -match "NEKRO_ADMIN_PASSWORD=\s*$|NEKRO_ADMIN_PASSWORD=$") {
-        $NEKRO_ADMIN_PASSWORD = Generate-RandomString -length 16
-        $envContent = $envContent -replace "^NEKRO_ADMIN_PASSWORD=\s*$|^NEKRO_ADMIN_PASSWORD=$", "NEKRO_ADMIN_PASSWORD=$NEKRO_ADMIN_PASSWORD"
-        $envContent | Set-Content ".env" -NoNewline
-    }
-}
+$configContent = $configContent -replace "^(NEKRO_DATA_DIR=).*", "`$1$env:NEKRO_DATA_DIR"
+
+$configContent = $configContent -replace "^(NEKRO_DATA_DIR_WIN=).*", "`$1$env:NEKRO_DATA_DIR_WIN"
+
+# 替换 OneBot Token
+$configContent = $configContent -replace "^(ONEBOT_ACCESS_TOKEN=).*", "`$1$oneBotToken"
+
+# 替换 Admin 密码
+$configContent = $configContent -replace "^(NEKRO_ADMIN_PASSWORD=).*", "`$1$adminPassword"
+
+# 写回配置文件
+$configContent | Set-Content $configFile
+
+# 输出结果
+Write-Host "OneBot Token: $oneBotToken"
+Write-Host "Admin Password: $adminPassword"
+Write-Host "配置文件已更新！"
+
 
 # 从.env文件加载环境变量
 if (Test-Path ".env") {
@@ -220,8 +199,6 @@ if (-not $env:INSTANCE_NAME) {
 # 显示重要的配置信息
 Write-Host "`n=== 重要配置信息 ===" -ForegroundColor Cyan
 $envContent = Get-Content ".env" -Raw
-$ONEBOT_ACCESS_TOKEN = ([regex]"^ONEBOT_ACCESS_TOKEN=([^\r\n]*)").Match($envContent).Groups[1].Value
-$NEKRO_ADMIN_PASSWORD = ([regex]"^NEKRO_ADMIN_PASSWORD=([^\r\n]*)").Match($envContent).Groups[1].Value
 Write-Host "OneBot 访问令牌: $ONEBOT_ACCESS_TOKEN"
 Write-Host "管理员账号: admin | 密码: $NEKRO_ADMIN_PASSWORD"
 

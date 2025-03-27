@@ -144,7 +144,8 @@ if [ -f .env ]; then
     export NAPCAT_EXPOSE_PORT=$NAPCAT_EXPOSE_PORT
 fi
 
-read -p "请检查并按需修改.env文件中的配置，未修改则按照默认配置安装，确认是否继续安装？[Y/n] " answer
+
+read -p "请检查并按需修改.env文件中的配置，未修改则按照默认配置安装，确认是否继续安装？如修改请重启安装脚本[Y/n] " answer
 if [[ $answer == "n" || $answer == "N" ]]; then
     echo "安装已取消"
     exit 0
